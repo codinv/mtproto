@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     network_mode: bridge
     ports:
-      - "8443:8443"   # you can change this to "443:443", "5000:5000", etc. — just make sure to set the same port in PORT= below
+      - 8443:8443      # you can change this to "443:443", "5000:5000", etc. — just make sure to set the same port in PORT= below
     environment:
       - SECRET=auto    # or specify your own 32-character hex secret
       - PORT=8443
