@@ -29,7 +29,7 @@ services:
     environment:
       - SECRET=auto    # or specify your own 32-character hex secret
       - PORT=8443
-      - WORKERS=1
+      - WORKERS=2
 ```
 
 ---
@@ -68,7 +68,7 @@ https://t.me/proxy?server=1.2.3.4&port=8443&secret=abcd1234abcd1234abcd1234abcd1
 | --------- | ----------------------------------------------------------------------- | ------- |
 | `SECRET`  | 32-char hex key for encryption (`auto` will generate one automatically) | `auto`  |
 | `PORT`    | Listening port inside the container                                     | `8443`  |
-| `WORKERS` | Number of worker threads                                                | `1`     |
+| `WORKERS` | Number of worker threads                                                | `2`     |
 
 ---
 
