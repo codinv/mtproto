@@ -1,11 +1,18 @@
 services:
   mtproto:
-    container_name: mtproto-proxy
     image: ghcr.io/codinv/mtproto
+    container_name: mtproto-proxy
     restart: unless-stopped
+    # Using bridge mode is standard for standalone proxy containers
     network_mode: bridge
     ports:
-      - "443:8443"       # change host port (e.g. 443:8443, 2053:8443), container port MUST stay 8443
+      # Map host port to container port 8443. 
+      # Common choices for host port are 443, 2053, or 8443.
+      - "443:8443"
     environment:
-      - SECRET=xxxx      # your own 32-character hex secret
-      - WORKERS=1        # recommended: 1 for better stability
+      # Your 32-character hexadecimal secret
+      - SECRET=xxxx
+      # Number of worker threads; 1 is recommended for stability
+      - WORKERS=1
+      # The external port used in generated Telegram links (matches the host port above)
+      - EXTERNAL_PORT=443
