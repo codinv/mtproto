@@ -51,7 +51,7 @@ head -c 16 /dev/urandom | xxd -ps
 
 ## 🌐 Connect via Telegram
 
-If your server IP is `1.2.3.4`, use one of these links:
+If your server IP is `1.2.3.4` and you use port `443`, your links will look like this:
 
 ```
 tg://proxy?server=1.2.3.4&port=443&secret=abcd1234abcd1234abcd1234abcd1234
@@ -63,16 +63,17 @@ or
 https://t.me/proxy?server=1.2.3.4&port=443&secret=abcd1234abcd1234abcd1234abcd1234
 ```
 
-> ⚠️ **Note:** If you change the port in your `docker-compose.yml`, update it in the links above.
+> ⚠️ **Note:** The proxy container always listens on port **8443** internally. Use `EXTERNAL_PORT` to ensure the generated links in logs show your public-facing port correctly.
 
 ---
 
 ## ⚙️ Environment Variables
 
-| Variable  | Description                                                             | Default |
-| --------- | ----------------------------------------------------------------------- | ------- |
-| `SECRET`  | 32-char hex key for encryption (`auto` will generate one automatically) | `auto`  |
-| `WORKERS` | Number of worker threads                                                | `1`     |
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `SECRET` | 32-char hex key for encryption (`auto` will generate one automatically) | `auto` |
+| `WORKERS` | Number of worker threads | `1` |
+| `EXTERNAL_PORT` | The public port used in Telegram links (should match your host port mapping) | `8443` |
 
 ---
 
@@ -84,7 +85,7 @@ Run in background:
 docker compose up -d
 ```
 
-View logs:
+View logs (and get your connection link):
 
 ```bash
 docker logs -f mtproto-proxy
@@ -95,6 +96,4 @@ docker logs -f mtproto-proxy
 ## 🧾 License
 
 MIT License
-© 2025 [codinv](https://github.com/codinv) — based on the original MTProxy by Telegram Messenger LLP.
-
----
+© 2026 [codinv](https://github.com/codinv) — based on the original MTProxy by Telegram Messenger LLP.
