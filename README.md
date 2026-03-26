@@ -22,13 +22,11 @@ services:
     container_name: mtproto-proxy
     image: ghcr.io/codinv/mtproto
     restart: unless-stopped
-    network_mode: bridge
     ports:
-      - 8443:8443      # you can change this to "443:443", "5000:5000", etc. — just make sure to set the same port in PORT= below
+      - "443:8443"       # change host port (e.g. 443:8443, 2053:8443), container port MUST stay 8443
     environment:
-      - SECRET=auto    # or specify your own 32-character hex secret
-      - PORT=8443
-      - WORKERS=2
+      - SECRET=xxxx      # your own 32-character hex secret
+      - WORKERS=1        # recommended: 1 for better stability
 ```
 
 ---
@@ -48,13 +46,13 @@ head -c 16 /dev/urandom | xxd -ps
 If your server IP is `1.2.3.4`, use one of these links:
 
 ```
-tg://proxy?server=1.2.3.4&port=8443&secret=abcd1234abcd1234abcd1234abcd1234
+tg://proxy?server=1.2.3.4&port=443&secret=abcd1234abcd1234abcd1234abcd1234
 ```
 
 or
 
 ```
-https://t.me/proxy?server=1.2.3.4&port=8443&secret=abcd1234abcd1234abcd1234abcd1234
+https://t.me/proxy?server=1.2.3.4&port=443&secret=abcd1234abcd1234abcd1234abcd1234
 ```
 
 > ⚠️ **Note:** If you change the port in your `docker-compose.yml`, update it in the links above.
@@ -66,8 +64,7 @@ https://t.me/proxy?server=1.2.3.4&port=8443&secret=abcd1234abcd1234abcd1234abcd1
 | Variable  | Description                                                             | Default |
 | --------- | ----------------------------------------------------------------------- | ------- |
 | `SECRET`  | 32-char hex key for encryption (`auto` will generate one automatically) | `auto`  |
-| `PORT`    | Listening port inside the container                                     | `8443`  |
-| `WORKERS` | Number of worker threads                                                | `2`     |
+| `WORKERS` | Number of worker threads                                                | `1`     |
 
 ---
 
