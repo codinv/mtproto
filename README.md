@@ -71,7 +71,7 @@ https://t.me/proxy?server=1.2.3.4&port=443&secret=abcd1234abcd1234abcd1234abcd12
 
 | Variable | Description | Default |
 | :--- | :--- | :--- |
-| `SECRET` | 32-char hex key for encryption (`auto` will generate one automatically) | `auto` |
+| `SECRET` | **Required.** 32-char hex key. Use `auto` to generate one on startup | `auto` |
 | `WORKERS` | Number of worker threads | `1` |
 | `EXTERNAL_PORT` | The public port used in Telegram links (should match your host port mapping) | `8443` |
 
