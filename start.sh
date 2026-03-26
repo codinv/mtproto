@@ -6,7 +6,8 @@ set -e
 
 # Defaults
 : "${WORKERS:=1}"
-PORT=8443
+INTERNAL_PORT=8443
+DISPLAY_PORT="${EXTERNAL_PORT:-$INTERNAL_PORT}"
 
 # External IP
 EXTERNAL_IP=$(curl -s --max-time 5 -4 https://api.ipify.org || \
@@ -37,7 +38,7 @@ if ! echo "$SECRET" | grep -qE '^[0-9a-fA-F]{32}$'; then
   exit 1
 fi
 
-# Workers (avoid issues with TLS)
+# Workers
 if [ "$WORKERS" -gt 1 ]; then
   WORKER_ARGS="-M $WORKERS"
 else
@@ -48,18 +49,20 @@ echo "======================================"
 echo "MTProto proxy starting"
 echo "[*] External IP: $EXTERNAL_IP"
 echo "[*] Internal IP: $INTERNAL_IP"
-echo "[*] Port: $PORT"
+echo "[*] Internal Port: $INTERNAL_PORT"
+echo "[*] Public Port (for link): $DISPLAY_PORT"
 echo "[*] Workers: $WORKERS"
 echo
 echo "Use this secret to connect to your proxy:"
-echo "tg://proxy?server=${EXTERNAL_IP}&port=${PORT}&secret=${SECRET}"
-echo "https://t.me/proxy?server=${EXTERNAL_IP}&port=${PORT}&secret=${SECRET}"
+echo "tg://proxy?server=${EXTERNAL_IP}&port=${DISPLAY_PORT}&secret=${SECRET}"
+echo "https://t.me/proxy?server=${EXTERNAL_IP}&port=${DISPLAY_PORT}&secret=${SECRET}"
 echo "======================================"
 
 # Start proxy
+# Внутри контейнера всегда слушаем INTERNAL_PORT (8443)
 exec /usr/local/bin/mtproto-proxy \
     -p 8888 \
-    -H "$PORT" \
+    -H "$INTERNAL_PORT" \
     -S "$SECRET" \
     --aes-pwd /etc/mtproto-proxy/proxy-secret \
     /etc/mtproto-proxy/proxy-multi.conf \
