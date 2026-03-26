@@ -22,6 +22,7 @@ services:
     container_name: mtproto-proxy
     image: ghcr.io/codinv/mtproto
     restart: unless-stopped
+    network_mode: bridge
     ports:
       - "443:8443"       # change host port (e.g. 443:8443, 2053:8443), container port MUST stay 8443
     environment:
