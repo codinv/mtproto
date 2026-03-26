@@ -6,10 +6,13 @@ set -e
 
 # Defaults
 : "${WORKERS:=1}"
-: "${PORT:=8443}"
+PORT=8443
 
-# Determine external and internal IP
-EXTERNAL_IP=$(curl -s -4 https://api.ipify.org || curl -s -4 https://ifconfig.me)
+# External IP
+EXTERNAL_IP=$(curl -s --max-time 5 -4 https://api.ipify.org || \
+              curl -s --max-time 5 -4 https://ifconfig.me)
+
+# Internal IP
 INTERNAL_IP=$(ip -4 route get 8.8.8.8 | awk '/src/ {print $7; exit}')
 
 if [ -z "$EXTERNAL_IP" ]; then
@@ -22,13 +25,25 @@ if [ -z "$INTERNAL_IP" ]; then
   exit 4
 fi
 
-# Generate or use existing secret
+# Secret
 if [ "$SECRET" = "auto" ] || [ -z "$SECRET" ]; then
   SECRET=$(head -c 16 /dev/urandom | xxd -ps)
   echo "[+] Generated secret: $SECRET"
 fi
 
-# Print connection info
+# Validate secret
+if ! echo "$SECRET" | grep -qE '^[0-9a-fA-F]{32}$'; then
+  echo "[F] SECRET must be exactly 32 hex characters"
+  exit 1
+fi
+
+# Workers (avoid issues with TLS)
+if [ "$WORKERS" -gt 1 ]; then
+  WORKER_ARGS="-M $WORKERS"
+else
+  WORKER_ARGS=""
+fi
+
 echo "======================================"
 echo "MTProto proxy starting"
 echo "[*] External IP: $EXTERNAL_IP"
@@ -43,12 +58,11 @@ echo "======================================"
 
 # Start proxy
 exec /usr/local/bin/mtproto-proxy \
-    -u mtproxy \
     -p 8888 \
     -H "$PORT" \
     -S "$SECRET" \
     --aes-pwd /etc/mtproto-proxy/proxy-secret \
     /etc/mtproto-proxy/proxy-multi.conf \
-    -M "$WORKERS" \
+    $WORKER_ARGS \
     --allow-skip-dh \
     --nat-info "$INTERNAL_IP:$EXTERNAL_IP"
