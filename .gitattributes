@@ -1,2 +1,7 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Force LF for scripts and configs to ensure Docker compatibility
+*.sh text eol=lf
+Dockerfile text eol=lf
+.gitattributes text eol=lf
