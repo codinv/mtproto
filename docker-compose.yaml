@@ -6,13 +6,40 @@ services:
     # Using bridge mode is standard for standalone proxy containers
     network_mode: bridge
     ports:
-      # Map host port to container port 8443. 
+      # Map host port to container port 8443.
       # Common choices for host port are 443, 2053, or 8443.
       - "443:8443"
+    volumes:
+      # Generated secrets are stored in ./data/secret, so links survive restarts and upgrades.
+      # The folder is created and its owner fixed automatically on start.
+      - ./data:/data
     environment:
-      # Your 32-character hexadecimal secret
-      - SECRET=xxxx
-      # Number of worker threads; 1 is recommended for stability
+      # "auto" generates a secret once and keeps it in /data/secret.
+      # Or set your own: 32 hex characters (up to 16, comma-separated).
+      - SECRET=auto
+      # Fake-TLS: the proxy masquerades as this site. Pick a popular site with
+      # TLS 1.3 that is reachable from the server. Comment the line out to use
+      # the classic mode with random padding (dd secrets) instead.
+      - TLS_DOMAIN=www.google.com
+      # Number of worker processes; keep 1 (recommended for stability and Fake-TLS)
       - WORKERS=1
       # The external port used in generated Telegram links (matches the host port above)
       - EXTERNAL_PORT=443
+      # Optional: proxy tag from @MTProxybot (32 hex characters)
+      # - TAG=
+      # Optional: set if the public IP cannot be auto-detected
+      # - EXTERNAL_IP=1.2.3.4
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # needed only to fix the owner of ./data and then drop root
+      - CHOWN
+      - SETUID
+      - SETGID
+    ulimits:
+      # the proxy raises its open files limit to ~65.5k at start-up
+      nofile:
+        soft: 131072
+        hard: 131072
