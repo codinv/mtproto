@@ -174,8 +174,6 @@ The Telegram configuration updates itself (see above), so you only need to pull 
 docker compose pull && docker compose up -d
 ```
 
-The image is rebuilt weekly from the latest upstream `master`. A build is published only if the smoke test passes (the proxy starts and answers its stats endpoint), so a broken upstream commit leaves the previous image in place. To build a specific upstream commit, run the workflow manually with `mtproxy_ref`, or locally: `docker build --build-arg MTPROXY_REF=<sha> ...`.
-
 ---
 
 ## 🧾 License
