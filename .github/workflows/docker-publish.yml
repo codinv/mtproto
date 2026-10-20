@@ -10,64 +10,148 @@ on:
           - Will be used as image tag
         required: true
         type: string
+      mtproxy_ref:
+        description: |
+          Upstream TelegramMessenger/MTProxy branch or commit to build
+          (optional, default: master)
+        required: false
+        default: master
+        type: string
   release:
     types: [published]
+
+concurrency:
+  group: docker-publish
+  cancel-in-progress: false
 
 jobs:
   docker:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     permissions:
       contents: read
       packages: write
-    
+
     steps:
       - name: Checkout project code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-        
+
       - name: Checkout ci-configs
         uses: actions/checkout@v4
         with:
           repository: codinv/ci-configs
           path: ci-configs
           token: ${{ secrets.PRIVATE_REPO_ACCESS_TOKEN }}
-          
+
       - name: Verify Dockerfile and set vars
+        env:
+          REPOSITORY: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
         run: |
-          PROJECT_NAME=$(basename ${{ github.repository }})
+          PROJECT_NAME=$(basename "$REPOSITORY")
           DOCKERFILE_PATH="ci-configs/$PROJECT_NAME/Dockerfile"
-          echo "DOCKERFILE_PATH=$DOCKERFILE_PATH" >> $GITHUB_ENV
-          echo "REG_REPO=${{ github.repository_owner }}/$PROJECT_NAME" >> $GITHUB_ENV
+          # image names must be lowercase
+          REG_REPO=$(echo "$OWNER/$PROJECT_NAME" | tr '[:upper:]' '[:lower:]')
+          echo "DOCKERFILE_PATH=$DOCKERFILE_PATH" >> "$GITHUB_ENV"
+          echo "REG_REPO=$REG_REPO" >> "$GITHUB_ENV"
           [ -f "$DOCKERFILE_PATH" ] || { echo "::error::Dockerfile not found at path: $DOCKERFILE_PATH"; exit 1; }
-          
+
+      - name: Lint entrypoint
+        run: |
+          bash -n start.sh
+          shellcheck -S warning start.sh
+
       - name: Determine image version
         id: set_version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ github.event.inputs.build_version }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "IMAGE_VERSION=${{ github.event.inputs.build_version }}" >> $GITHUB_OUTPUT
-          else
-            echo "IMAGE_VERSION=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          case "$EVENT_NAME" in
+            workflow_dispatch) IMAGE_VERSION="$INPUT_VERSION" ;;
+            release)           IMAGE_VERSION="$RELEASE_TAG" ;;
+            *)                 IMAGE_VERSION="build-$(date -u +%Y%m%d)" ;;
+          esac
+          # must be a valid Docker tag
+          if ! [[ "$IMAGE_VERSION" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+            echo "::error::Invalid image version: '$IMAGE_VERSION'"
+            exit 1
           fi
+          echo "IMAGE_VERSION=$IMAGE_VERSION" >> "$GITHUB_OUTPUT"
           echo "Using version: $IMAGE_VERSION"
-        
+
+      - name: Resolve upstream MTProxy commit
+        id: upstream
+        env:
+          INPUT_REF: ${{ github.event.inputs.mtproxy_ref }}
+        run: |
+          REF="${INPUT_REF:-master}"
+          if [[ "$REF" =~ ^[0-9a-f]{40}$ ]]; then
+            SHA="$REF"
+          else
+            SHA=$(git ls-remote https://github.com/TelegramMessenger/MTProxy.git "$REF" | awk 'NR==1 {print $1}')
+          fi
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Cannot resolve upstream ref '$REF'"; exit 1; }
+          echo "MTPROXY_SHA=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Building TelegramMessenger/MTProxy $REF = $SHA"
+
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-          
-      - name: Build and push (SINGLE ARCH)
+
+      - name: Build (SINGLE ARCH - amd64 only, MTProxy needs x86 AES-NI)
+        env:
+          IMAGE_VERSION: ${{ steps.set_version.outputs.IMAGE_VERSION }}
+          MTPROXY_SHA: ${{ steps.upstream.outputs.MTPROXY_SHA }}
         run: |
-          docker build \
+          docker build --pull \
             -f "$DOCKERFILE_PATH" \
-            -t "ghcr.io/$REG_REPO:${{ steps.set_version.outputs.IMAGE_VERSION }}" \
+            --build-arg "MTPROXY_REF=$MTPROXY_SHA" \
+            --label "org.opencontainers.image.version=$IMAGE_VERSION" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            -t "ghcr.io/$REG_REPO:$IMAGE_VERSION" \
             -t "ghcr.io/$REG_REPO:latest" \
             .
-          docker push "ghcr.io/$REG_REPO:${{ steps.set_version.outputs.IMAGE_VERSION }}"
-          docker push "ghcr.io/$REG_REPO:latest"
+
+      - name: Smoke test image
         env:
-          REG_REPO: ${{ env.REG_REPO }}
+          IMAGE_VERSION: ${{ steps.set_version.outputs.IMAGE_VERSION }}
+        run: |
+          IMAGE="ghcr.io/$REG_REPO:$IMAGE_VERSION"
+
+          # the binary must find all its shared libraries
+          docker run --rm --entrypoint bash "$IMAGE" -c \
+            '! ldd /usr/local/bin/mtproto-proxy | grep "not found"'
+
+          # start the proxy with test values and wait for the local stats endpoint
+          cid=$(docker run -d \
+            -e SECRET=0123456789abcdef0123456789abcdef \
+            -e EXTERNAL_IP=203.0.113.1 \
+            -e INTERNAL_IP=172.17.0.2 \
+            "$IMAGE")
+          ok=0
+          for _ in $(seq 1 40); do
+            if docker exec "$cid" curl -fsS -o /dev/null http://127.0.0.1:8888/stats; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+          docker logs "$cid" || true
+          docker rm -f "$cid" > /dev/null
+          [ "$ok" = 1 ] || { echo "::error::proxy did not come up"; exit 1; }
+
+      - name: Push
+        env:
+          IMAGE_VERSION: ${{ steps.set_version.outputs.IMAGE_VERSION }}
+        run: |
+          docker push "ghcr.io/$REG_REPO:$IMAGE_VERSION"
+          docker push "ghcr.io/$REG_REPO:latest"
